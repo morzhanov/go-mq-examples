@@ -1,59 +1,86 @@
 package rabbitmq
 
 import (
-	"context"
+	"fmt"
+	"log"
+	"time"
 
-	"github.com/segmentio/kafka-go"
+	"github.com/morzhanov/go-mq-examples/internal/mq"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type rmq struct {
-	conn     *kafka.Conn
-	kafkaUri string
-	topic    string
+	ch    *amqp.Channel
+	qName string
 }
 
-type RabbitMQ interface {
-	CreateReader(groupId string) *kafka.Reader
-	Conn() *kafka.Conn
-}
-
-func (k *rmq) createTopic() error {
-	topicConfigs := []kafka.TopicConfig{
-		{
-			Topic:             k.topic,
-			NumPartitions:     1,
-			ReplicationFactor: 1,
-		},
+func (r *rmq) Produce() {
+	i := 0
+	for {
+		pub := amqp.Publishing{
+			ContentType: "text/plain",
+			MessageId:   fmt.Sprintf("__rabbitmq_msg_id_%d__", i),
+			Body:        []byte(fmt.Sprintf("__rabbitmq_msg_value_%d__", i)),
+		}
+		i++
+		if err :=
+			r.ch.Publish("", r.qName, false, false, pub); err != nil {
+			fmt.Println(fmt.Errorf("error in rabbitmq producer: %w", err))
+		}
+		time.Sleep(time.Second * 5)
 	}
-	return k.conn.CreateTopics(topicConfigs...)
 }
 
-func (k *rmq) CreateReader(groupId string) *kafka.Reader {
-	return kafka.NewReader(kafka.ReaderConfig{
-		Brokers:  []string{k.kafkaUri},
-		Topic:    k.topic,
-		GroupID:  groupId,
-		MinBytes: 10e3,
-		MaxBytes: 10e6,
-	})
-}
-
-func (k *rmq) Conn() *kafka.Conn {
-	return k.conn
-}
-
-func NewRabbitMQ(uri string, topic string) (res RabbitMQ, err error) {
-	conn, err := kafka.DialLeader(context.Background(), "tcp", uri, topic, 0)
+func (r *rmq) Listen() {
+	msgs, err := r.ch.Consume(
+		r.qName,
+		"",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
 	if err != nil {
-		return nil, err
+		fmt.Println(fmt.Errorf("error in rabbitmq listener: %w", err))
 	}
-	msgQ := rmq{
-		conn,
-		uri,
-		topic,
+	for d := range msgs {
+		log.Println(fmt.Sprintf(`rabbitmq message received MID: "%s", BODY: "%s"`, d.MessageId, d.Body))
 	}
-	if err := msgQ.createTopic(); err != nil {
-		return nil, err
+}
+
+func (r *rmq) createQueue() (amqp.Queue, error) {
+	return r.ch.QueueDeclare(
+		r.qName,
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
+}
+
+func NewRabbitMQ(uri string, queue string) (res mq.MQ, close func(), err error) {
+	conn, err := amqp.Dial(uri)
+	if err != nil {
+		return nil, nil, err
 	}
-	return &msgQ, nil
+	ch, err := conn.Channel()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	r := &rmq{ch, queue}
+	if _, err := r.createQueue(); err != nil {
+		return nil, nil, err
+	}
+	return r, func() {
+		closeMsg := fmt.Errorf("error during rabbitmq connection closing: %w", err)
+		if err := ch.Close(); err != nil {
+			log.Println(closeMsg)
+		}
+		if err := conn.Close(); err != nil {
+			log.Println(closeMsg)
+		}
+	}, nil
 }

@@ -49,12 +49,10 @@ services:
     image: webcenter/activemq:5.14.3
     ports:
       - "1883:1883"
-      - "5672:5673"
       - "8161:8161"
       - "61613:61613"
       - "61614:61614"
       - "61616:61616"
-    networks: [ backing-services ]
     volumes: [ "activemq_data:/opt/activemq/conf", "activemq_data:/data/activemq", "activemq_data:/var/log/activemq" ]
     environment:
       ACTIVEMQ_REMOVE_DEFAULT_ACCOUNT: "true"
@@ -71,6 +69,8 @@ services:
       ACTIVEMQ_ENABLED_SCHEDULER: "true"
       ACTIVEMQ_MIN_MEMORY: 512
       ACTIVEMQ_MAX_MEMORY: 2048
+    networks:
+      - go-mq-examples
 
 networks:
   go-mq-examples:

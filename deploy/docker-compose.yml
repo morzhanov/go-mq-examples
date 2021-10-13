@@ -1,0 +1,80 @@
+version: "3"
+services:
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: go_mq_examples_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - ~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq/
+      - ~/.docker-conf/rabbitmq/log/:/var/log/rabbitmq
+    networks:
+      - go-mq-examples
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: go_mq_examples_zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "22181:2181"
+    networks:
+      - go-mq-examples
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: go_mq_examples_kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 15048576
+      KAFKA_PRODUCER_MAX_REQUEST_SIZE: 15048576
+      KAFKA_CONSUMER_MAX_PARTITION_FETCH_BYTES: 15048576
+      CONNECT_PRODUCER_MAX_REQUEST_SIZE: 15048576
+      CONNECT_CONSUMER_MAX_PARTITION_FETCH_BYTES: 15048576
+    networks:
+      - go-mq-examples
+
+  activemq:
+    image: webcenter/activemq:5.14.3
+    ports:
+      - "1883:1883"
+      - "5672:5673"
+      - "8161:8161"
+      - "61613:61613"
+      - "61614:61614"
+      - "61616:61616"
+    networks: [ backing-services ]
+    volumes: [ "activemq_data:/opt/activemq/conf", "activemq_data:/data/activemq", "activemq_data:/var/log/activemq" ]
+    environment:
+      ACTIVEMQ_REMOVE_DEFAULT_ACCOUNT: "true"
+      ACTIVEMQ_ADMIN_LOGIN: admin
+      ACTIVEMQ_ADMIN_PASSWORD: password
+      ACTIVEMQ_WRITE_LOGIN: write
+      ACTIVEMQ_WRITE_PASSWORD: password
+      ACTIVEMQ_READ_LOGIN: read
+      ACTIVEMQ_READ_PASSWORD: password
+      ACTIVEMQ_JMX_LOGIN: jmx
+      ACTIVEMQ_JMX_PASSWORD: password
+      ACTIVEMQ_STATIC_TOPICS: static-topic-1;static-topic-2
+      ACTIVEMQ_STATIC_QUEUES: static-queue-1;static-queue-2
+      ACTIVEMQ_ENABLED_SCHEDULER: "true"
+      ACTIVEMQ_MIN_MEMORY: 512
+      ACTIVEMQ_MAX_MEMORY: 2048
+
+networks:
+  go-mq-examples:
+
+volumes:
+  rabbitmq:
+  activemq_data:

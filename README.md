@@ -1,4 +1,4 @@
-# go-mq-examples
+# Go Message queue examples
 
 Go Message Queue examples (ActiveMQ, Kafka, RabbitMQ).
 
